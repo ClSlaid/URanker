@@ -1,6 +1,6 @@
 # URanker
 
-URanker is a CLI tool used to rank top-100 URLs from URL datasets.
+URanker is a CLI tool abling to rank top-100 URLs from URL datasets.
 
 ## Data input
 

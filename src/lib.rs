@@ -1,6 +1,6 @@
-pub mod reader;
 pub mod map_reduce;
 pub mod ranker;
+pub mod reader;
 
 pub use reader::MyReader;
 

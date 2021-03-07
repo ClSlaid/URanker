@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["ClSlaid <cailue@bupt.edu.cn>"]
 edition = "2018"
 
-description = "A CLI tool used to pick up top-100 occured "
+description = "URanker is a tiny CLI tool abling to rank top-100 URLs from URL datasets.\nFully written in rust!"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

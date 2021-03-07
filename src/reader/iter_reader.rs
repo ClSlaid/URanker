@@ -1,14 +1,14 @@
 //! read to buf
 
-use std::io::{Read, SeekFrom, Seek};
-use std::fs::File;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap};
-use std::iter::{Iterator};
-use std::hash::Hasher;
 use log::*;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::fs::File;
+use std::hash::Hasher;
+use std::io::{Read, Seek, SeekFrom};
+use std::iter::Iterator;
 
-const LONG_LOG: &'static str = ".URanker/long";
+const LONG_LOG: &'static str = "/tmp/URanker/long";
 const BUF_SIZE: usize = 6 * 1024 * 1024;
 // static BUFFER: [u8; BUF_SIZE] = [b'\0'; BUF_SIZE];
 
@@ -41,10 +41,17 @@ pub struct IterReader {
 impl IterReader {
     /// # make a new instance
     pub fn new<P: Into<String>>(file: P, div: u8) -> std::io::Result<Self> {
-        File::create(LONG_LOG)?;
         let f = File::open(file.into())?;
         let v = vec![b'\0'; BUF_SIZE];
-        Ok(Self {file: f, read_cur: 0, divider: div, long_urls: HashMap::new(), buf:v.into_boxed_slice(), len:0, cur: 0})
+        Ok(Self {
+            file: f,
+            read_cur: 0,
+            divider: div,
+            long_urls: HashMap::new(),
+            buf: v.into_boxed_slice(),
+            len: 0,
+            cur: 0,
+        })
     }
 
     /// # load buffer content from file
@@ -59,18 +66,19 @@ impl IterReader {
     /// if can get a full url, return (full URL string, true)
     ///
     /// if cannot get a full url, return (part URL String, false)
-    fn buf_pick(&mut self,
-                s: String,
-                // is the previous reading successful?
-                is_last_success: bool)
-                -> (String, bool) {
+    fn buf_pick(
+        &mut self,
+        s: String,
+        // is the previous reading successful?
+        is_last_success: bool,
+    ) -> (String, bool) {
         let mut prev = b'\0';
         let mut s = String::from(s);
-        let file_end = self.len < self.buf.len();     // check if the file reading is ended.
+        let file_end = self.len < self.buf.len(); // check if the file reading is ended.
 
-        for i in self.cur .. self.len {
+        for i in self.cur..self.len {
             let b = self.buf[i];
-            if b == self.divider || (b == b'\0' && file_end){
+            if b == self.divider || (b == b'\0' && file_end) {
                 if prev == self.divider || (is_last_success == true && s.is_empty()) {
                     // avoid begin reading *new* URL at dividers
                     // if is_last_success is true means function is reading new URL...
@@ -79,7 +87,7 @@ impl IterReader {
                 }
                 self.cur = i + 1;
 
-                return (s, true)
+                return (s, true);
             }
 
             s.push(char::from(b));
@@ -88,7 +96,7 @@ impl IterReader {
         if self.len == 0 {
             // because always buffer_loaded before using buffer_pick
             // add such patch works I guess...
-            return (s, true)
+            return (s, true);
         }
         (s, false)
     }
@@ -98,12 +106,11 @@ impl Iterator for IterReader {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-
         let s = String::new();
         if self.cur + 1 > self.len {
             if self.buf_load().unwrap() == 0 {
                 // eventually end reading...
-                return None
+                return None;
             }
         }
         // check whether have divider in buffer
@@ -114,7 +121,6 @@ impl Iterator for IterReader {
         }
         // have no divider in buffer
         self.buf_load().unwrap();
-
 
         let (s, is_full) = self.buf_pick(s, is_full);
         if is_full {
@@ -131,7 +137,7 @@ impl Iterator for IterReader {
         hs.write(s.clone().as_bytes());
         let mut s_len = s.len();
 
-        loop{
+        loop {
             self.buf_load().unwrap();
             let s = String::new();
             let (s, is_full) = self.buf_pick(s, is_full);
@@ -151,11 +157,12 @@ impl Iterator for IterReader {
     }
 }
 
-
 impl Drop for IterReader {
     fn drop(&mut self) {
-        let f = File::open(LONG_LOG).unwrap();
-        serde_json::to_writer(f, &self.long_urls).unwrap();
+        if !self.long_urls.is_empty() {
+            let mut f = File::create(LONG_LOG).unwrap();
+            serde_json::to_writer(f, &self.long_urls).unwrap();
+        }
         info!("IterReader Dropped!");
     }
 }
