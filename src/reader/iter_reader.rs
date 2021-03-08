@@ -1,5 +1,6 @@
 //! read to buf
 
+use crate::reader::LONG_LOG;
 use log::*;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -8,7 +9,6 @@ use std::hash::Hasher;
 use std::io::{Read, Seek, SeekFrom};
 use std::iter::Iterator;
 
-const LONG_LOG: &'static str = "/tmp/URanker/long";
 const BUF_SIZE: usize = 6 * 1024 * 1024;
 // static BUFFER: [u8; BUF_SIZE] = [b'\0'; BUF_SIZE];
 
@@ -35,7 +35,7 @@ pub struct IterReader {
     /// where next URL begins in buffer
     cur: usize,
     /// long urls' hash value and it's first appearance place in raw file.
-    long_urls: HashMap<u64, usize>,
+    long_urls: HashMap<u64, (usize, usize)>,
 }
 
 impl IterReader {
@@ -150,7 +150,9 @@ impl Iterator for IterReader {
         }
         let hs_val = hs.finish();
         let s = format!("uranker://{}", hs_val);
-        self.long_urls.entry(hs_val).or_insert(self.read_cur);
+        self.long_urls
+            .entry(hs_val)
+            .or_insert((self.read_cur, s_len));
         self.read_cur += s_len + 1;
 
         Some(s)

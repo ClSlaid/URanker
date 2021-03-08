@@ -14,9 +14,9 @@ use std::thread;
 use clap::{App, Arg, SubCommand};
 use log::*;
 use threadpool::ThreadPool;
-use uranker::map_f;
-use uranker::map_reduce::{map, reduce};
-use uranker::{reduce_f, MyReader};
+use uranker::mul_thread::{map, reduce, rank};
+use uranker::{map_f, reduce_f, SourceReader};
+use std::fs::File;
 
 // number of reducers
 const MAPPER_NUM: usize = 4;
@@ -39,7 +39,7 @@ fn startup(file: &str) {
 
     // a 10 file sized queue
     let (tx, rx) = mpsc::sync_channel(10);
-    let mut reader = MyReader::new(file, b'\n', tx).unwrap();
+    let mut reader = SourceReader::new(file, b'\n', tx).unwrap();
     let rt = thread::spawn(move || reader.split_file());
 
     // map phase
@@ -50,7 +50,7 @@ fn startup(file: &str) {
     let reduced = reduce(counter, reduce_f, REDUCER_NUM).unwrap();
 
     // rank phase
-
+    rank(file, reduced);
 }
 fn main() {
     let matches = App::new("URanker")

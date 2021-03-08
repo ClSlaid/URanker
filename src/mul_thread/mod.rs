@@ -1,10 +1,13 @@
+mod mul_reader;
+
+use crate::mul_thread::mul_reader::MulReader;
+use crate::reader::LONG_LOG;
 use anyhow::Result;
 use log::*;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::ops::AddAssign;
+use std::io::{copy, BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Split, Write};
+use std::str::FromStr;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
@@ -40,7 +43,7 @@ pub fn map(rx: Receiver<String>, map_f: MapFn, worker_num: usize) -> Result<usiz
     Ok(*c)
 }
 
-type ReduceFn = fn(usize, usize, usize) -> Option<HashMap<String, u64>>;
+type ReduceFn = fn(usize, usize, usize) -> Option<Vec<(String, u64)>>;
 
 pub fn reduce(counter: usize, reduce_f: ReduceFn, worker_num: usize) -> Result<usize> {
     let pool = ThreadPool::new(worker_num);
@@ -49,17 +52,14 @@ pub fn reduce(counter: usize, reduce_f: ReduceFn, worker_num: usize) -> Result<u
         pool.execute(move || {
             let o_file = File::create(format!("/tmp/URanker/reduce-{}", i)).unwrap();
             let mut writer = BufWriter::new(o_file);
-            let mut reduced = HashMap::new();
+            let mut v = Vec::new();
 
             match reduce_f(i, worker_num, counter) {
-                Some(hm) => reduced = hm,
+                Some(hm) => v = hm,
                 _ => {
                     panic!("serde sucks");
                 }
             }
-
-            let mut v = reduced.into_iter().collect::<Vec<(String, u64)>>();
-            v.sort_by(|a, b| b.1.cmp(&a.1));
 
             for kv in v {
                 write!(writer, "{}\n", serde_json::to_string(&kv).unwrap());
@@ -69,4 +69,54 @@ pub fn reduce(counter: usize, reduce_f: ReduceFn, worker_num: usize) -> Result<u
 
     pool.join();
     Ok(worker_num)
+}
+
+pub fn rank<P: Into<String>>(source: P, reduce_num: usize) {
+    let reader = MulReader::new(reduce_num);
+    let long = File::open(LONG_LOG);
+    let s = source.into();
+    let mut writer = BufWriter::new(File::create("report.csv").unwrap());
+    let mut long_map = HashMap::<u64, (u64, u64)>::new();
+    match long {
+        Ok(long_log) => {
+            long_map = serde_json::from_reader(long_log).unwrap();
+            true
+        }
+        _ => false,
+    };
+
+    writer.write("URL, Frequency\n".as_bytes());
+    let mut counter = 0;
+    for (url, val) in reader {
+        if counter >= 100 {
+            break
+        }
+        if !long_map.is_empty() && url.starts_with("uranker://") {
+            write_long(s.clone(), long_map.clone(), url, &mut writer);
+        } else {
+            writer.write(format!("{}, {}\n", url, val).as_bytes());
+        }
+        counter += 1;
+    }
+}
+
+fn write_long(
+    source: String,
+    long_map: HashMap<u64, (u64, u64)>,
+    hashed: String,
+    writer: &mut BufWriter<File>,
+) {
+    // drop "uranker://"
+    let hash_val = hashed[10..].parse::<u64>().unwrap();
+
+    // long URL's position and its length in source file.
+    let (url_pos, url_len) = long_map.get(&hash_val).unwrap();
+
+    let mut source = File::open(source).unwrap();
+
+    let mut buffer = ['\0'; 50];
+    source.seek(SeekFrom::Start(*url_pos));
+    let mut handle = source.take(*url_len);
+
+    copy(&mut handle, writer);
 }

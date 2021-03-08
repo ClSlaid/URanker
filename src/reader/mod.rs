@@ -9,19 +9,20 @@ use std::io::{BufRead, BufReader};
 use std::sync::mpsc;
 
 const BUF_MAX: usize = 15 * 1024 * 1024; // 15 MB
+pub const LONG_LOG: &'static str = "/tmp/URanker/long";
 
 #[derive(Debug)]
-pub struct MyReader {
+pub struct SourceReader {
     source: Option<IterReader>,
     div: u8,
     buf_pipe: mpsc::SyncSender<String>,
     buffer: String,
 }
 
-impl MyReader {
+impl SourceReader {
     // spawn a new reader instance
     pub fn new(file: &str, div: u8, buf_pipe: mpsc::SyncSender<String>) -> Result<Self> {
-        Ok(MyReader {
+        Ok(Self {
             source: Some(IterReader::new(file, div)?),
             div,
             buf_pipe,
@@ -59,7 +60,7 @@ impl MyReader {
     }
 }
 
-impl Drop for MyReader {
+impl Drop for SourceReader {
     fn drop(&mut self) {
         self.buf_pipe.send(self.buffer.clone());
         self.buffer.clear();
