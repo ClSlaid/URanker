@@ -62,7 +62,7 @@ After the `Map` and `Reduce` phase, the intermediate data should shrink a lot co
 
 `Ranker` takes in all `Reducer`'s intermediate file and sort KV pairs by value. Then produce top-100 frequency URLs.
 
-## Project structure and detailed introduction
+## Project structure and explaination
 
 ### reader
 
